@@ -25,6 +25,7 @@ try {
   httpCache = YAML.safeLoad(fs.readFileSync(pathLib.join(__dirname,'../metadata/httpCache.yaml'),'utf8'));
 }
 catch (ex) {
+  console.log(ex.message);
   httpCache = { cache: [] };
 }
 var resolverContext = {
@@ -208,6 +209,15 @@ function updateCollection(dir, command) {
   specSources.getLeads(util.getSpecs(dir))
     .then(leads => _.toPairs(leads))
     .each(([filename, lead]) => {
+      var origin = _.cloneDeep(util.getOrigin(lead));
+      if (Array.isArray(origin))
+	    origin = origin.pop();
+      var source = origin.url;
+      var cacheEntry = getCacheEntry(source);
+	  if (cacheEntry.skip && !command.force) {
+        console.log('SKIP '+source);
+	    return null;
+	  }
       return writeSpecFromLead(lead, command)
         .then(swagger => {
           if (swagger) {
@@ -409,13 +419,6 @@ function writeSpec(source, format, exPatch, command) {
       context.spec = spec;
       if (resolverContext.called && !resolverContext.anyDiff)
         throw Error('Warning: Not modified');
-      var cacheEntry = getCacheEntry(source);
-      if (cacheEntry.skip && !command.force) {
-        console.log(source);
-		resolverContext.anyDiff = false;
-        throw Error('Warning: URL is marked for skipping');
-      }
-
       var fixup = util.readYaml(getOriginFixupPath(spec));
       jsondiffpatch.patch(spec, fixup);
 
